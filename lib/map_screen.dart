@@ -20,15 +20,21 @@ class MapScreenState extends State<MapScreen> {
   Geoflutterfire geo = Geoflutterfire();
 
   BehaviorSubject<double> radius = BehaviorSubject<double>.seeded(100.0);
-  Stream<dynamic> query;
 
   StreamSubscription subscription;
 
   Map<MarkerId, Marker> markers = <MarkerId, Marker>{};
 
-  static final CameraPosition _kGooglePlex = CameraPosition(
-    target: LatLng(37.42796133580664, -122.085749655962),
-    zoom: 14.4746,
+  bool _isRelocatingContainer = false;
+  bool _isModalVisible = false;
+  String _selectedPoint = '';
+
+  static double get initialLat => 39.897037;
+  static double get initialLng => 32.775253;
+
+  static final CameraPosition _initialCameraPosition = CameraPosition(
+    target: LatLng(initialLat, initialLng),
+    zoom: 12.0,
   );
 
   @override
@@ -36,121 +42,198 @@ class MapScreenState extends State<MapScreen> {
     return Scaffold(
       body: Stack(children: [
         GoogleMap(
-          initialCameraPosition: _kGooglePlex,
+          initialCameraPosition: _initialCameraPosition,
           onMapCreated: _onMapCreated,
           myLocationEnabled: true,
           mapType: MapType.hybrid,
           markers: Set<Marker>.of(markers.values),
-          onTap: _addMarker,
-          //trackCameraPosition: true
+          onTap: _isRelocatingContainer ? _relocateContainerLocally : null,
         ),
-
         Positioned(
-            bottom: 50,
-            left: 10,
-            child: Slider(
-              min: 100.0,
-              max: 500.0,
-              divisions: 4,
-              value: radius.value,
-              label: 'Radius ${radius.value}km',
-              activeColor: Colors.green,
-              inactiveColor: Colors.green.withOpacity(0.2),
-              onChanged: _updateQuery,
-            )
-        )
+          bottom: 50,
+          left: 10,
+          child: _buildSlider(),
+        ),
+        _buildContainerDetailsCard(context),
+        _buildRelocationCard(),
       ]),
     );
   }
 
+  Widget _buildRelocationCard() {
+    return containerCard(
+      visibilityCondition: _isRelocatingContainer,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            '''Please select a location from the map for your pin to be relocated. You can select a location by tapping on the map.''',
+            softWrap: true,
+          ),
+          FlatButton(
+            child: Text('SAVE'),
+            onPressed: () {
+              _relocateContainerOnServer();
+              setState(() {
+                _isRelocatingContainer = false;
+              });
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContainerDetailsCard(BuildContext context) {
+    return containerCard(
+      visibilityCondition: _isModalVisible && !_isRelocatingContainer,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            _selectedPoint,
+            style: Theme.of(context).textTheme.headline6,
+          ),
+          Row(
+            children: [
+              FlatButton(
+                child: Text('NAVIGATE'),
+                onPressed: () {
+                  setState(() {
+                    _isRelocatingContainer = false;
+                    _isModalVisible = false;
+                  });
+                },
+              ),
+              FlatButton(
+                child: Text('RELOCATE'),
+                onPressed: () => _toggleToRelocateContainerMode(_selectedPoint),
+              )
+            ],
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget containerCard(
+      {@required Widget child, @required bool visibilityCondition}) {
+    return Visibility(
+      visible: visibilityCondition,
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: FractionallySizedBox(
+          heightFactor: 0.3,
+          widthFactor: 0.9,
+          child: Card(margin: EdgeInsets.only(bottom: 50), child: child),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSlider() => Slider(
+        min: 100.0,
+        max: 500.0,
+        divisions: 4,
+        value: radius.value,
+        label: 'Radius ${radius.value}km',
+        activeColor: Colors.green,
+        inactiveColor: Colors.green.withOpacity(0.2),
+        onChanged: _updateZoom,
+      );
+
   void _onMapCreated(GoogleMapController controller) {
-    _startQuery();
     setState(() {
       _mapController = controller;
     });
-    _animateToUser();
-  }
-
-  _addMarker(LatLng latLng) async {
-    var markerIdVal = 'Magic Marker';
-    final MarkerId markerId = MarkerId(markerIdVal);
-
-    var marker = Marker(
-      markerId: markerId,
-      position: latLng,
-      icon: BitmapDescriptor.defaultMarker,
-      infoWindow: InfoWindow(title: markerIdVal, snippet: '🍄🍄🍄'),
-    );
-
-    _addGeoPoint(latLng);
-
-    setState(() {
-      markers[markerId] = marker;
-    });
-  }
-
-  _animateToUser() async {
-    var pos = await location.getLocation();
-    _mapController.animateCamera(CameraUpdate.newCameraPosition(CameraPosition(
-      target: LatLng(pos.latitude, pos.latitude),
-      zoom: 17.0,
-    )));
-  }
-
-  Future<DocumentReference> _addGeoPoint(LatLng latLng) async {
-    GeoFirePoint point =
-        geo.point(latitude: latLng.latitude, longitude: latLng.longitude);
-    return firestore
-        .collection('locations')
-        .add({'position': point.data, 'name': 'Magic Marker'});
+    _startQuery();
   }
 
   _startQuery() async {
-    var pos = await location.getLocation();
-    double lat = pos.latitude;
-    double lng = pos.longitude;
+    final pos = await location.getLocation();
+    final lat = pos.latitude ?? initialLat;
+    final lng = pos.longitude ?? initialLng;
+    final ref = firestore.collection('locations');
+    final center = geo.point(latitude: lat, longitude: lng);
 
-    var ref = firestore.collection('locations');
-    GeoFirePoint center = geo.point(latitude: lat, longitude: lng);
+    _animateToUser(pos);
+    _subscribeToMarkerUpdates(ref, center);
+  }
 
+  _animateToUser(LocationData pos) async {
+    _mapController.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: LatLng(pos.latitude, pos.latitude),
+          zoom: 17.0,
+        ),
+      ),
+    );
+  }
+
+  void _subscribeToMarkerUpdates(CollectionReference ref, GeoFirePoint center) {
     subscription = radius.switchMap((rad) {
       return geo.collection(collectionRef: ref).within(
-          center: center, radius: rad, field: 'position', strictMode: true);
+            center: center,
+            radius: rad,
+            field: 'position',
+            //strictMode: true,
+          );
     }).listen(_updateMarkers);
   }
 
   void _updateMarkers(List<DocumentSnapshot> documentList) {
-    print('==========================================');
-    print(documentList);
-
     markers.clear();
-
-    var updatedMarkers = <MarkerId, Marker>{};
-
     documentList.forEach((DocumentSnapshot document) {
-      var data = document.data();
-      print(data);
-      GeoPoint pos = data['position']['geopoint'];
-      var markerIdVal = data['name'];
+      final data = document.data();
+      final GeoPoint pos = data['position']['geopoint'];
+      final String markerIdVal = data['name'];
 
-      final MarkerId markerId = MarkerId(markerIdVal);
-
-      var marker = Marker(
-        markerId: markerId,
-        position: LatLng(pos.latitude, pos.longitude),
-        icon: BitmapDescriptor.defaultMarker,
-        infoWindow: InfoWindow(title: markerIdVal, snippet: '🍄🍄🍄'),
-      );
-
-      updatedMarkers[markerId] = marker;
+      _addMarker(pos, markerIdVal);
     });
-
-    setState(() {
-      markers.addAll(updatedMarkers);
-    });
+    setState(() {});
   }
 
-  _updateQuery(value) {
+  _addMarker(GeoPoint pos, String markerIdVal) {
+    final MarkerId markerId = MarkerId(markerIdVal);
+    final LatLng posLatLng = LatLng(pos.latitude, pos.longitude);
+    final marker = newMarker(markerId, posLatLng, markerIdVal);
+
+    markers[markerId] = marker;
+  }
+
+  Marker newMarker(MarkerId markerId, LatLng pos, String markerIdVal) {
+    return Marker(
+      markerId: markerId,
+      position: pos,
+      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+      //infoWindow: InfoWindow(title: markerIdVal, snippet: '🍄🍄🍄'),
+      onTap: () => _showModal(markerIdVal),
+    );
+  }
+
+  _addGeoPoint(LatLng latLng) async {
+    final id = firestore.app.options.hashCode.toString();
+    GeoFirePoint point =
+        geo.point(latitude: latLng.latitude, longitude: latLng.longitude);
+    return firestore
+        .collection('locations')
+        .doc(id)
+        .set({'position': point.data, 'name': id});
+  }
+
+  Future<void> _relocateGeoPoint(String id, LatLng newLatLng) async {
+    GeoFirePoint point =
+        geo.point(latitude: newLatLng.latitude, longitude: newLatLng.longitude);
+    return firestore
+        .collection('locations')
+        .doc(id)
+        .set({'position': point.data, 'name': id});
+  }
+
+  _updateZoom(value) {
     final zoomMap = {
       100.0: 12.0,
       200.0: 10.0,
@@ -163,6 +246,38 @@ class MapScreenState extends State<MapScreen> {
 
     setState(() {
       radius.add(value);
+    });
+  }
+
+  _showModal(String markerIdVal) {
+    setState(() {
+      _selectedPoint = markerIdVal;
+      _isModalVisible = true;
+    });
+  }
+
+  _relocateContainerLocally(LatLng newLatLng) async {
+    final String markerIdVal = _selectedPoint;
+    final GeoPoint pos = GeoPoint(newLatLng.latitude, newLatLng.longitude);
+    _addMarker(pos, markerIdVal);
+    setState(() {});
+  }
+
+  _relocateContainerOnServer() async {
+    final String markerIdVal = _selectedPoint;
+    final MarkerId markerId = MarkerId(markerIdVal);
+    final newLatLng = markers[markerId].position;
+    await _relocateGeoPoint(markerIdVal, newLatLng);
+    setState(() {
+      _isRelocatingContainer = false;
+    });
+  }
+
+  _toggleToRelocateContainerMode(String selectedPoint) {
+    final MarkerId markerId = MarkerId(selectedPoint);
+    markers.removeWhere((key, value) => key != markerId);
+    setState(() {
+      _isRelocatingContainer = true;
     });
   }
 
