@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="49" height="58" viewBox="0 0 49 58" style="fill: #ffe9cf30;">
+    <style>
+        .a{fill:#e9cf30;}
+    </style>
+    <g transform="translate(9 6)">
+        <g class="b" transform="matrix(1, 0, 0, 1, -9, -6)">
+            <path class="a" d="M18523,17852h.1a15.5,15.5,0,1,1,22.807,0h.094l-11.5,14Z" transform="translate(-18510 -17820)"/>
+        </g>
+    </g>
+</svg>
