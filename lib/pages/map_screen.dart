@@ -7,13 +7,13 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:geoflutterfire/geoflutterfire.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
-import 'package:map_containers/shared/snackbars.dart';
 import 'package:rxdart/rxdart.dart';
 
 import '../constants/constants.dart';
 import '../services/connectivity/connectivity_service.dart';
 import '../shared/buttons.dart';
 import '../shared/modals.dart';
+import '../shared/snackbars.dart';
 import '../utils/svg_bitmap_descriptor.dart';
 
 class MapScreen extends StatefulWidget {
@@ -50,6 +50,7 @@ class MapScreenState extends State<MapScreen> {
   Scaffold build(BuildContext context) {
     ScreenUtil.init(context, width: 360, height: 740, allowFontScaling: true);
     _createMarkerImageFromAsset(context);
+
     return Scaffold(
       body: Stack(children: [
         GoogleMap(
@@ -75,6 +76,29 @@ class MapScreenState extends State<MapScreen> {
         ),
       ]),
     );
+  }
+
+  void _refreshUI() => setState(() {});
+
+  @override
+  void initState() {
+    super.initState();
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (connectionStatus.hasConnection != null &&
+          !connectionStatus.hasConnection) {
+        showSnackBar(context,
+            text: 'Please Connect to the internet', onPressed: null);
+      }
+
+      connectivitySubscription =
+          connectionStatus.connectionChange.listen((dynamic hasConnection) {
+            if (hasConnection != null && hasConnection is bool && !hasConnection) {
+              showSnackBar(context,
+                  text: 'No internet connection', onPressed: null);
+              _refreshUI();
+            }
+          });
+    });
   }
 
   Widget _buildSlider() => Slider(
@@ -199,28 +223,6 @@ class MapScreenState extends State<MapScreen> {
     );
   }
 
-  @override
-  void initState() {
-    super.initState();
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      if (connectionStatus.hasConnection != null &&
-          !connectionStatus.hasConnection) {
-        showSnackBar(context,
-            text: 'Please Connect to the internet', onPressed: null);
-      }
-
-      connectivitySubscription =
-          connectionStatus.connectionChange.listen((dynamic hasConnection) {
-        if (hasConnection != null && hasConnection is bool && !hasConnection) {
-          showSnackBar(context,
-              text: 'No internet connection', onPressed: null);
-
-          _refreshUI();
-        }
-      });
-    });
-  }
-
   void _subscribeToMarkerUpdates(CollectionReference ref, GeoFirePoint center) {
     subscription = radius.switchMap((rad) {
       return geo.collection(collectionRef: ref).within(
@@ -326,8 +328,6 @@ class MapScreenState extends State<MapScreen> {
     _isRelocatingContainer = true;
     _refreshUI();
   }
-
-  void _refreshUI() => setState(() {});
 
   @override
   void dispose() {
