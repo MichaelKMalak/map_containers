@@ -7,6 +7,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:geoflutterfire/geoflutterfire.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
+import 'package:map_containers/models/container.dart';
 import 'package:rxdart/rxdart.dart';
 
 import '../constants/constants.dart';
@@ -26,7 +27,7 @@ class MapScreen extends StatefulWidget {
 
 class MapScreenState extends State<MapScreen> {
   GoogleMapController _mapController;
-  Location location = Location();
+  Location currentUserLocation = Location();
 
   Repository repository =
       Repository(FirebaseFirestore.instance, Geoflutterfire());
@@ -39,7 +40,7 @@ class MapScreenState extends State<MapScreen> {
 
   bool _isRelocatingContainer = false;
   bool _isModalVisible = false;
-  String _selectedPoint = '';
+  String _selectedContainerName = '';
 
   BitmapDescriptor _greenMarkerIcon;
   BitmapDescriptor _yellowMarkerIcon;
@@ -50,8 +51,6 @@ class MapScreenState extends State<MapScreen> {
   @override
   Scaffold build(BuildContext context) {
     ScreenUtil.init(context, width: 360, height: 740, allowFontScaling: true);
-    _createMarkerImageFromAsset(context);
-
     return Scaffold(
       body: Stack(children: [
         GoogleMap(
@@ -85,21 +84,29 @@ class MapScreenState extends State<MapScreen> {
   void initState() {
     super.initState();
     SchedulerBinding.instance.addPostFrameCallback((_) {
-      if (connectionStatus.hasConnection != null &&
-          !connectionStatus.hasConnection) {
-        showSnackBar(context,
-            text: 'Please Connect to the internet', onPressed: null);
-      }
-
-      connectivitySubscription =
-          connectionStatus.connectionChange.listen((dynamic hasConnection) {
-        if (hasConnection != null && hasConnection is bool && !hasConnection) {
-          showSnackBar(context,
-              text: 'No internet connection', onPressed: null);
-          _refreshUI();
-        }
-      });
+      _createMarkerImageFromAsset(context);
+      checkInternetConnectivity(context);
+      subscribeToConnectivityChanges(context);
     });
+  }
+
+  void subscribeToConnectivityChanges(BuildContext context) {
+    connectivitySubscription =
+        connectionStatus.connectionChange.listen((dynamic hasConnection) {
+          if (hasConnection != null && hasConnection is bool && !hasConnection) {
+            showSnackBar(context,
+                text: 'No internet connection', onPressed: null);
+            _refreshUI();
+          }
+        });
+  }
+
+  void checkInternetConnectivity(BuildContext context) {
+    if (connectionStatus.hasConnection != null &&
+        !connectionStatus.hasConnection) {
+      showSnackBar(context,
+          text: 'Please Connect to the internet', onPressed: null);
+    }
   }
 
   Widget _buildSlider() => Slider(
@@ -146,7 +153,7 @@ class MapScreenState extends State<MapScreen> {
             padding: EdgeInsets.symmetric(
                 horizontal: 21.w as double, vertical: 19.02.w as double),
             child: Text(
-              _selectedPoint,
+              _selectedContainerName,
               style: Theme.of(context).textTheme.headline6,
             ),
           ),
@@ -162,7 +169,7 @@ class MapScreenState extends State<MapScreen> {
                 text: 'NAVIGATE',
               ),
               buildRaisedButton(
-                onPressed: () => _toggleToRelocateContainerMode(_selectedPoint),
+                onPressed: () => _toggleToRelocateContainerMode(_selectedContainerName),
                 text: 'RELOCATE',
               )
             ],
@@ -203,7 +210,7 @@ class MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _startQuery() async {
-    final pos = await location.getLocation();
+    final pos = await currentUserLocation.getLocation();
     final lat = pos.latitude ?? Constants.position.initialLat;
     final lng = pos.longitude ?? Constants.position.initialLng;
     final center = LatLng(lat, lng);
@@ -229,23 +236,18 @@ class MapScreenState extends State<MapScreen> {
         .listen(_updateMarkers);
   }
 
-  void _updateMarkers(List<DocumentSnapshot> documentList) {
+  void _updateMarkers(List<MapContainer> containerList) {
     markers.clear();
-    for (final document in documentList) {
-      final data = document.data();
-      final pos = data['position']['geopoint'] as GeoPoint;
-      final markerIdVal = data['name'] as String;
-
-      _addMarkerToList(pos, markerIdVal);
+    for (final container in containerList) {
+      _addMarkerToList(container.position, container.name);
     }
     _refreshUI();
   }
 
-  void _addMarkerToList(GeoPoint pos, String markerIdVal,
+  void _addMarkerToList(LatLng pos, String markerIdVal,
       {bool isYellowMarker = false}) {
     final markerId = MarkerId(markerIdVal);
-    final posLatLng = LatLng(pos.latitude, pos.longitude);
-    final marker = newMarker(markerId, posLatLng, markerIdVal,
+    final marker = newMarker(markerId, pos, markerIdVal,
         isYellowMarker: isYellowMarker);
 
     markers[markerId] = marker;
@@ -278,23 +280,23 @@ class MapScreenState extends State<MapScreen> {
   }
 
   void _showModal(String markerIdVal) {
-    _selectedPoint = markerIdVal;
+    _selectedContainerName = markerIdVal;
     _isModalVisible = true;
     _refreshUI();
   }
 
   void _relocateContainerLocally(LatLng newLatLng) {
-    final markerIdVal = _selectedPoint;
-    final pos = GeoPoint(newLatLng.latitude, newLatLng.longitude);
-    _addMarkerToList(pos, markerIdVal, isYellowMarker: true);
+    final markerIdVal = _selectedContainerName;
+    _addMarkerToList(newLatLng, markerIdVal, isYellowMarker: true);
     _refreshUI();
   }
 
   Future<void> _relocateContainerOnServer() async {
-    final markerIdVal = _selectedPoint;
+    final markerIdVal = _selectedContainerName;
     final markerId = MarkerId(markerIdVal);
     final newLatLng = markers[markerId].position;
-    await repository.updateContainersPosition(markerIdVal, newLatLng);
+    final updatedContainer = MapContainer(name: markerIdVal, position: newLatLng);
+    await repository.updateContainersPosition(updatedContainer);
     _isRelocatingContainer = false;
     _refreshUI();
   }
