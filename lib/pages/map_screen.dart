@@ -11,6 +11,7 @@ import 'package:rxdart/rxdart.dart';
 
 import '../constants/constants.dart';
 import '../services/connectivity/connectivity_service.dart';
+import '../services/repository/repository.dart';
 import '../shared/buttons.dart';
 import '../shared/modals.dart';
 import '../shared/snackbars.dart';
@@ -27,8 +28,8 @@ class MapScreenState extends State<MapScreen> {
   GoogleMapController _mapController;
   Location location = Location();
 
-  FirebaseFirestore firestore = FirebaseFirestore.instance;
-  Geoflutterfire geo = Geoflutterfire();
+  Repository repository =
+      Repository(FirebaseFirestore.instance, Geoflutterfire());
 
   BehaviorSubject<double> radius = BehaviorSubject<double>.seeded(100);
 
@@ -92,12 +93,12 @@ class MapScreenState extends State<MapScreen> {
 
       connectivitySubscription =
           connectionStatus.connectionChange.listen((dynamic hasConnection) {
-            if (hasConnection != null && hasConnection is bool && !hasConnection) {
-              showSnackBar(context,
-                  text: 'No internet connection', onPressed: null);
-              _refreshUI();
-            }
-          });
+        if (hasConnection != null && hasConnection is bool && !hasConnection) {
+          showSnackBar(context,
+              text: 'No internet connection', onPressed: null);
+          _refreshUI();
+        }
+      });
     });
   }
 
@@ -205,11 +206,10 @@ class MapScreenState extends State<MapScreen> {
     final pos = await location.getLocation();
     final lat = pos.latitude ?? Constants.position.initialLat;
     final lng = pos.longitude ?? Constants.position.initialLng;
-    final ref = firestore.collection('locations');
-    final center = geo.point(latitude: lat, longitude: lng);
+    final center = LatLng(lat, lng);
 
     _animateToUser(pos);
-    _subscribeToMarkerUpdates(ref, center);
+    _subscribeToMarkerUpdates(center);
   }
 
   void _animateToUser(LocationData pos) {
@@ -223,15 +223,10 @@ class MapScreenState extends State<MapScreen> {
     );
   }
 
-  void _subscribeToMarkerUpdates(CollectionReference ref, GeoFirePoint center) {
-    subscription = radius.switchMap((rad) {
-      return geo.collection(collectionRef: ref).within(
-            center: center,
-            radius: rad,
-            field: 'position',
-            //strictMode: true,
-          );
-    }).listen(_updateMarkers);
+  void _subscribeToMarkerUpdates(LatLng center) {
+    subscription = radius
+        .switchMap((rad) => repository.getContainers(center, rad))
+        .listen(_updateMarkers);
   }
 
   void _updateMarkers(List<DocumentSnapshot> documentList) {
@@ -268,17 +263,6 @@ class MapScreenState extends State<MapScreen> {
     );
   }
 
-
-
-  Future<void> _relocateGeoPoint(String id, LatLng newLatLng) async {
-    final point =
-        geo.point(latitude: newLatLng.latitude, longitude: newLatLng.longitude);
-    return firestore
-        .collection('locations')
-        .doc(id)
-        .set(<String, dynamic>{'position': point.data, 'name': id});
-  }
-
   void _updateZoom(double value) {
     final zoomMap = {
       100.0: 17.0,
@@ -310,7 +294,7 @@ class MapScreenState extends State<MapScreen> {
     final markerIdVal = _selectedPoint;
     final markerId = MarkerId(markerIdVal);
     final newLatLng = markers[markerId].position;
-    await _relocateGeoPoint(markerIdVal, newLatLng);
+    await repository.updateContainersPosition(markerIdVal, newLatLng);
     _isRelocatingContainer = false;
     _refreshUI();
   }
