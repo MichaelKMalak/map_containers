@@ -65,3 +65,5 @@ linter:
 
     # Not nessecary for an application and more pointed towards public API's
     public_member_api_docs: false
+
+    avoid_positional_boolean_parameters: false

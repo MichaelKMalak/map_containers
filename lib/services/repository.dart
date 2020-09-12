@@ -2,9 +2,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geoflutterfire/geoflutterfire.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:map_containers/constants/constants.dart';
-import 'package:map_containers/utils/randomize_latlng.dart';
-import '../../models/container.dart';
+
+import '../constants/constants.dart';
+import '../models/map_container_model.dart';
+import '../utils/randomize_latlng.dart';
 
 class Repository {
   Repository(this._firestore, this._geo)

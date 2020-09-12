@@ -1,12 +1,18 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
+import 'package:geoflutterfire/geoflutterfire.dart';
+
+
 import 'constants/constants.dart';
 
-import 'pages/map_screen.dart';
+import 'features/map_feature/map_screen.dart';
+import 'services/connectivity_service.dart';
+import 'services/repository.dart';
 
 FirebaseAnalytics analytics;
 
@@ -18,6 +24,9 @@ Future<void> main() async {
 
   Crashlytics.instance.enableInDevMode = true;
   FlutterError.onError = Crashlytics.instance.recordFlutterError;
+
+  final connectionStatus = ConnectivityService.getInstance();
+  connectionStatus.initialize();
 
   runApp(const MyApp());
 }
@@ -37,11 +46,12 @@ class MyApp extends StatelessWidget {
               bodyColor: Constants.color.darkGrey,
               displayColor: Colors.white),
           buttonTheme: ButtonThemeData(
-            buttonColor: Constants.color.green,
-            textTheme: ButtonTextTheme.primary
-          )
+              buttonColor: Constants.color.green,
+              textTheme: ButtonTextTheme.primary)),
+      home: MapScreen(
+        repository: Repository(FirebaseFirestore.instance, Geoflutterfire()),
+        connectionStatus: ConnectivityService.getInstance(),
       ),
-      home: const MapScreen(),
     );
   }
 }

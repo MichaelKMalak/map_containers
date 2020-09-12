@@ -13,7 +13,7 @@ class ConnectivityService {
   static ConnectivityService getInstance() => _singleton;
 
   //This tracks the current connection status
-  bool hasConnection ;
+  bool hasConnection;
 
   //This is how we'll allow subscribing to connection changes
   StreamController connectionChangeController = StreamController<dynamic>.broadcast();

@@ -5,5 +5,5 @@ import 'position.dart';
 class Constants {
   static const ConstantColors color = ConstantColors();
   static const ConstantImagePaths imagePath = ConstantImagePaths();
-  static const ConstantPositions position = ConstantPositions();
+  static const ConstantMapParameters position = ConstantMapParameters();
 }
