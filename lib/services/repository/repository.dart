@@ -1,7 +1,10 @@
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geoflutterfire/geoflutterfire.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:map_containers/models/container.dart';
+import 'package:map_containers/constants/constants.dart';
+import 'package:map_containers/utils/randomize_latlng.dart';
+import '../../models/container.dart';
 
 class Repository {
   Repository(this._firestore, this._geo)
@@ -20,7 +23,7 @@ class Repository {
           center: center,
           radius: rad,
           field: 'position',
-          //strictMode: true,
+          strictMode: true,
         )
         .map(toMapContainers);
   }
@@ -36,5 +39,14 @@ class Repository {
         .collection('locations')
         .doc(container.name)
         .set(container.toJson());
+  }
+
+  Future<void> generateAThousandGeoPoint() async {
+    for (var i = 0; i < 1000; i++) {
+      final name = _firestore.app.options.hashCode.toString();
+      final position = RandomizeLatLng.withCenter(Constants.position.initialLatLng);
+      final container = MapContainer(name:  name, position: position);
+      await updateContainersPosition(container);
+    }
   }
 }

@@ -6,8 +6,10 @@ class ConstantPositions {
   double get initialLat => 39.897037;
   double get initialLng => 32.775253;
 
+  LatLng get initialLatLng => LatLng(initialLat, initialLng);
+
   CameraPosition get initialCameraPosition => CameraPosition(
-    target: LatLng(initialLat, initialLng),
+    target: initialLatLng,
     zoom: 17,
   );
 }

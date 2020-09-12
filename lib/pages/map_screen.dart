@@ -7,10 +7,10 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:geoflutterfire/geoflutterfire.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
-import 'package:map_containers/models/container.dart';
 import 'package:rxdart/rxdart.dart';
 
 import '../constants/constants.dart';
+import '../models/container.dart';
 import '../services/connectivity/connectivity_service.dart';
 import '../services/repository/repository.dart';
 import '../shared/buttons.dart';
@@ -37,6 +37,7 @@ class MapScreenState extends State<MapScreen> {
   StreamSubscription subscription;
 
   Map<MarkerId, Marker> markers = <MarkerId, Marker>{};
+  List<MapContainer> containerList = <MapContainer>[];
 
   bool _isRelocatingContainer = false;
   bool _isModalVisible = false;
@@ -238,6 +239,7 @@ class MapScreenState extends State<MapScreen> {
 
   void _updateMarkers(List<MapContainer> containerList) {
     markers.clear();
+    this.containerList = containerList;
     for (final container in containerList) {
       _addMarkerToList(container.position, container.name);
     }
