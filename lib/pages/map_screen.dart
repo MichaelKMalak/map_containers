@@ -37,7 +37,7 @@ class MapScreenState extends State<MapScreen> {
   StreamSubscription subscription;
 
   Map<MarkerId, Marker> markers = <MarkerId, Marker>{};
-  List<MapContainer> containerList = <MapContainer>[];
+  Map<String, MapContainer> containerList = <String, MapContainer>{};
 
   bool _isRelocatingContainer = false;
   bool _isModalVisible = false;
@@ -94,12 +94,11 @@ class MapScreenState extends State<MapScreen> {
   void subscribeToConnectivityChanges(BuildContext context) {
     connectivitySubscription =
         connectionStatus.connectionChange.listen((dynamic hasConnection) {
-          if (hasConnection != null && hasConnection is bool && !hasConnection) {
-            showSnackBar(context,
-                text: 'No internet connection', onPressed: null);
-            _refreshUI();
-          }
-        });
+      if (hasConnection != null && hasConnection is bool && !hasConnection) {
+        showSnackBar(context, text: 'No internet connection', onPressed: null);
+        _refreshUI();
+      }
+    });
   }
 
   void checkInternetConnectivity(BuildContext context) {
@@ -170,7 +169,8 @@ class MapScreenState extends State<MapScreen> {
                 text: 'NAVIGATE',
               ),
               buildRaisedButton(
-                onPressed: () => _toggleToRelocateContainerMode(_selectedContainerName),
+                onPressed: () =>
+                    _toggleToRelocateContainerMode(_selectedContainerName),
                 text: 'RELOCATE',
               )
             ],
@@ -239,7 +239,9 @@ class MapScreenState extends State<MapScreen> {
 
   void _updateMarkers(List<MapContainer> containerList) {
     markers.clear();
-    this.containerList = containerList;
+
+    this.containerList = {for (var e in containerList) e.name: e};
+
     for (final container in containerList) {
       _addMarkerToList(container.position, container.name);
     }
@@ -249,8 +251,8 @@ class MapScreenState extends State<MapScreen> {
   void _addMarkerToList(LatLng pos, String markerIdVal,
       {bool isYellowMarker = false}) {
     final markerId = MarkerId(markerIdVal);
-    final marker = newMarker(markerId, pos, markerIdVal,
-        isYellowMarker: isYellowMarker);
+    final marker =
+        newMarker(markerId, pos, markerIdVal, isYellowMarker: isYellowMarker);
 
     markers[markerId] = marker;
   }
@@ -297,7 +299,8 @@ class MapScreenState extends State<MapScreen> {
     final markerIdVal = _selectedContainerName;
     final markerId = MarkerId(markerIdVal);
     final newLatLng = markers[markerId].position;
-    final updatedContainer = MapContainer(name: markerIdVal, position: newLatLng);
+    final updatedContainer =
+        MapContainer(name: markerIdVal, position: newLatLng);
     await repository.updateContainersPosition(updatedContainer);
     _isRelocatingContainer = false;
     _refreshUI();

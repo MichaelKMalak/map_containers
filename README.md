@@ -1,5 +1,7 @@
 # map_containers
+Viewing 1000 points on map realtime from firebase and adjusting them efficiently.
 
-You can access the apk from the [releases page](https://github.com/MichaelKMalak/map_containers/releases)
+<img src="https://github.com/MichaelKMalak/map_containers/blob/master/screenshots/Screenshot_1.png" width="350" />
 
-A snapshot in 11 September 2020: https://github.com/MichaelKMalak/map_containers/tree/11092020-snapshot
+- You can access the apk from the [releases page](https://github.com/MichaelKMalak/map_containers/releases)
+- A snapshot in 11 September 2020 us available at: https://github.com/MichaelKMalak/map_containers/tree/11092020-snapshot
